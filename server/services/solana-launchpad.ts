@@ -165,8 +165,8 @@ export async function launchToken(
 
     console.log(`✅ Fee config created! ID: ${feeShareConfig.id}`);
 
-    // ==================== STEP 3: METEORA DBC CONFIG ====================
-    console.log("\n🔐 Step 3: Preparing Meteora Liquidity Config...");
+    // ==================== STEP 3: OPTIMIZED METEORA DBC CONFIG ====================
+    console.log("\n🔐 Step 3: Preparing High-Impact Liquidity Config...");
 
     const METEORA_DBC_PROGRAM_ID = new PublicKey(
       "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"
@@ -175,9 +175,12 @@ export async function launchToken(
     const dbcConfig = {
       dbcProgramId: METEORA_DBC_PROGRAM_ID.toBase58(),
       initialTokenLiquidity: liquiditySupplyRaw.toString(),
-      initialSolLiquidityLamports: (0.5 * LAMPORTS_PER_SOL).toString(),
+      // 🔥 TWEAK 1: Increase initial SOL to make the pool look healthier
+      // (Example: 2 SOL. Change this based on your budget)
+      initialSolLiquidityLamports: (2.0 * LAMPORTS_PER_SOL).toString(),
       curveConfig: {
-        startingPriceLamports: (0.0005 * LAMPORTS_PER_SOL).toString(),
+        // 🔥 TWEAK 2: Lower starting price to give early buyers a better multiplier
+        startingPriceLamports: (0.0001 * LAMPORTS_PER_SOL).toString(),
       },
     };
 
