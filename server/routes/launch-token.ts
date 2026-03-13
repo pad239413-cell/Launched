@@ -65,7 +65,11 @@ export const handleLaunchToken: RequestHandler = async (req, res) => {
       signature: result.signature,
       tokenMint: result.tokenMint,
       bundleId: result.bundleId,
+      meVProtected: result.meVProtected,
       explorerUrl: `https://solscan.io/tx/${result.signature}`,
+      securityNote: result.meVProtected
+        ? "🛡️ Your launch was protected by Jito bundling - MEV bots couldn't front-run!"
+        : "⚠️ Launch used standard RPC - consider Jito bundling for stronger MEV protection",
     });
   } catch (err) {
     console.error("Token launch error:", err);

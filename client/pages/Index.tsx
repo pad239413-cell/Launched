@@ -8,11 +8,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, Rocket, Settings, Zap } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+interface LaunchResult {
+  success: boolean;
+  signature?: string;
+  tokenMint?: string;
+  bundleId?: string;
+  meVProtected?: boolean;
+  securityNote?: string;
+  explorerUrl?: string;
+}
+
 export default function Index() {
   const [activeTab, setActiveTab] = useState("metadata");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [launchResult, setLaunchResult] = useState<LaunchResult | null>(null);
 
   const [formData, setFormData] = useState({
     // Metadata
@@ -50,6 +61,7 @@ export default function Index() {
     setLoading(true);
     setError(null);
     setSuccess(false);
+    setLaunchResult(null);
 
     try {
       // Validate inputs
@@ -74,12 +86,16 @@ export default function Index() {
       }
 
       const result = await response.json();
+      setLaunchResult(result);
       setSuccess(true);
 
-      // Show transaction details
-      if (result.signature) {
-        alert(`✅ Token launched successfully!\nTransaction: ${result.signature}\nExplorer: https://solscan.io/tx/${result.signature}`);
-      }
+      // Show detailed transaction info
+      const mevStatus = result.meVProtected
+        ? "🛡️ MEV PROTECTED (Jito Bundle)"
+        : "⚠️ Standard RPC Launch";
+
+      const message = `✅ TOKEN LAUNCHED SUCCESSFULLY!\n\n${mevStatus}\n\nToken Mint: ${result.tokenMint}\nTransaction: ${result.signature}\n\nView on Solscan:\n${result.explorerUrl}`;
+      alert(message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -111,11 +127,55 @@ export default function Index() {
             </Alert>
           )}
 
-          {success && (
-            <Alert className="mb-6 border-green-500/50 bg-green-500/10">
-              <Rocket className="h-4 w-4 text-green-500" />
-              <AlertDescription className="text-green-200">Token launched successfully! Check Solscan for transaction details.</AlertDescription>
-            </Alert>
+          {success && launchResult && (
+            <div className="mb-6 space-y-3">
+              <Alert className="border-green-500/50 bg-green-500/10">
+                <Rocket className="h-4 w-4 text-green-500" />
+                <AlertDescription className="text-green-200">
+                  ✅ Token launched successfully!
+                </AlertDescription>
+              </Alert>
+
+              {launchResult.meVProtected && (
+                <Alert className="border-primary/50 bg-primary/10">
+                  <AlertCircle className="h-4 w-4 text-primary" />
+                  <AlertDescription className="text-primary">
+                    🛡️ <strong>MEV PROTECTED:</strong> Your launch was secured with Jito bundling. MEV bots couldn't front-run your deployment!
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {!launchResult.meVProtected && (
+                <Alert className="border-yellow-500/50 bg-yellow-500/10">
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-700">
+                    ℹ️ <strong>Standard Launch:</strong> Consider using Jito bundling in the future for stronger MEV protection.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <Card className="bg-primary/5 border-primary/20">
+                <CardContent className="pt-6">
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Token Mint:</strong> <code className="bg-background/50 px-2 py-1 rounded text-xs break-all">{launchResult.tokenMint}</code></p>
+                    <p><strong>Transaction:</strong> <code className="bg-background/50 px-2 py-1 rounded text-xs break-all">{launchResult.signature}</code></p>
+                    {launchResult.bundleId && (
+                      <p><strong>Bundle ID:</strong> <code className="bg-background/50 px-2 py-1 rounded text-xs break-all">{launchResult.bundleId}</code></p>
+                    )}
+                    <p className="mt-3">
+                      <a
+                        href={launchResult.explorerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-semibold"
+                      >
+                        View on Solscan →
+                      </a>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {/* Form Card */}
@@ -348,16 +408,35 @@ export default function Index() {
                       </p>
                     </div>
 
+                    <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 mb-4">
+                      <h3 className="font-semibold text-primary mb-3 flex items-center gap-2">
+                        <Zap className="w-4 h-4" />
+                        🚀 Jito Bundling: Your MEV Protection
+                      </h3>
+                      <div className="text-sm text-muted-foreground space-y-2">
+                        <p>
+                          <strong className="text-foreground">What it does:</strong> Jito bundling packages your launch transactions into an atomic bundle, preventing predatory MEV bots from front-running your deployment.
+                        </p>
+                        <p>
+                          <strong className="text-foreground">Why it matters:</strong> Without Jito protection, MEV bots can intercept your launch transactions, steal the cheapest tokens on the bonding curve before real buyers get in, and sell at a profit—all within milliseconds.
+                        </p>
+                        <p>
+                          <strong className="text-foreground">The benefit:</strong> With Jito bundling, your launch is atomic. All transactions execute together or not at all. This ensures fair access for early buyers and stops predatory MEV extraction.
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="bg-secondary/10 border border-secondary/20 rounded-lg p-4">
                       <h3 className="font-semibold text-secondary mb-2 flex items-center gap-2">
                         <Settings className="w-4 h-4" />
                         Integration Details
                       </h3>
                       <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>✓ Bags SDK Integration</li>
-                        <li>✓ Jito Bundle MEV Protection</li>
-                        <li>✓ Meteora DBC Liquidity</li>
-                        <li>✓ Auto-fee-share Configuration</li>
+                        <li>✅ Bags SDK Integration</li>
+                        <li>🛡️ Jito Bundle MEV Protection (Automatic)</li>
+                        <li>🔐 Meteora DBC Locked Liquidity</li>
+                        <li>💰 Auto-fee-share Configuration</li>
+                        <li>⚡ Optimized Liquidity Config (2 SOL + Low Start Price)</li>
                       </ul>
                     </div>
                   </TabsContent>
@@ -388,17 +467,17 @@ export default function Index() {
           </Card>
 
           {/* Info Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-12">
             <Card className="card-glass border-primary/20">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Zap className="w-4 h-4 text-primary" />
-                  Fast & Secure
+                  Jito MEV Shield
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Leverages Bags SDK with Jito bundles for MEV protection and reliable mainnet execution
+                  Automatic Jito bundling prevents bots from front-running your launch
                 </p>
               </CardContent>
             </Card>
@@ -412,7 +491,7 @@ export default function Index() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Liquidity automatically locked in Meteora DBC for anti-rug security and LP authenticity
+                  Meteora DBC locks your LP tokens to prevent rug-pulls
                 </p>
               </CardContent>
             </Card>
@@ -421,12 +500,25 @@ export default function Index() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Settings className="w-4 h-4 text-accent" />
-                  Full Control
+                  Optimized Pool
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Customize all token parameters, supply, fees, and deployment settings
+                  2 SOL liquidity + low starting price for better early-buyer incentives
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="card-glass border-primary/20">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  ⚡ Full Control
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Customize all token parameters, supply allocation, and fees
                 </p>
               </CardContent>
             </Card>

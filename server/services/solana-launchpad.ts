@@ -50,6 +50,7 @@ export interface LaunchResult {
   signature?: string;
   tokenMint?: string;
   bundleId?: string;
+  meVProtected?: boolean;
   error?: string;
 }
 
@@ -197,8 +198,8 @@ export async function launchToken(
 
     console.log(`📄 Received ${unsignedTransactions.length} transaction(s)`);
 
-    // ==================== STEP 5: SIGN & SEND TRANSACTIONS ====================
-    console.log("\n🚀 Step 5: Broadcasting to Mainnet...");
+    // ==================== STEP 5: JITO BUNDLING FOR MEV PROTECTION ====================
+    console.log("\n🚀 Step 5: Broadcasting with MEV Protection via Jito Bundling...");
 
     const txs = unsignedTransactions.map((txBytes: Buffer) =>
       VersionedTransaction.deserialize(txBytes)
@@ -206,13 +207,21 @@ export async function launchToken(
 
     let finalSignature: string | undefined;
     let bundleId: string | undefined;
-    const FALLBACK_JITO_TIP = 0.02 * LAMPORTS_PER_SOL;
+    let meVProtected = false;
+
+    // Jito bundling params - crucial for preventing MEV bots from front-running
+    const FALLBACK_JITO_TIP = 0.02 * LAMPORTS_PER_SOL; // 0.02 SOL fallback tip
 
     if (txs.length > 1) {
-      console.log("📦 Packaging as Jito Bundle...");
+      console.log(`\n🛡️ JITO BUNDLING ACTIVATED`);
+      console.log(`   ├─ Transactions: ${txs.length}`);
+      console.log(`   ├─ Protection: MEV-proof atomicity`);
+      console.log(`   └─ Benefit: Prevents front-running bots\n`);
 
       const tipLamports =
         jitoTipLamports ?? BigInt(Math.floor(FALLBACK_JITO_TIP));
+
+      console.log(`💸 Jito Tip: ${(Number(tipLamports) / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
 
       const tipTx = await createTipTransaction({
         connection,
@@ -221,32 +230,47 @@ export async function launchToken(
       });
 
       const allTxs = [...txs, tipTx];
+      console.log(`📦 Signing ${allTxs.length} transactions...`);
       allTxs.forEach((tx) => tx.sign([creatorKeypair]));
 
       try {
+        console.log("⏳ Submitting Jito bundle for atomic execution...");
         bundleId = await sendBundleAndConfirm({
           connection,
           transactions: allTxs,
         });
-        console.log(`✅ Bundle sent! ID: ${bundleId}`);
+        console.log(`\n✅ JITO BUNDLE ACCEPTED!`);
+        console.log(`   ├─ Bundle ID: ${bundleId}`);
+        console.log(`   ├─ Status: Pending Jito leader slot`);
+        console.log(`   ├─ MEV Protection: ACTIVE 🛡️`);
+        console.log(`   └─ Note: Transactions are atomic - execute together or not at all\n`);
+
+        meVProtected = true;
         finalSignature = bundleId;
       } catch (bundleErr) {
-        console.error(
-          "⚠️ Bundle failed. Falling back to sequential broadcast..."
-        );
+        console.error(`\n⚠️  Jito bundle failed: ${bundleErr}`);
+        console.log("Falling back to sequential RPC broadcast (less secure)...\n");
 
+        meVProtected = false;
         for (const [index, tx] of txs.entries()) {
-          const sig = await signAndSendTransaction({
-            connection,
-            transaction: tx,
-            signers: [creatorKeypair],
-          });
-          console.log(`✔️ Fallback Tx ${index + 1}: ${getSolscanLink(sig)}`);
-          if (index === 0) finalSignature = sig;
+          try {
+            const sig = await signAndSendTransaction({
+              connection,
+              transaction: tx,
+              signers: [creatorKeypair],
+            });
+            console.log(`✔️ Fallback Tx ${index + 1} confirmed: ${getSolscanLink(sig)}`);
+            if (index === 0) finalSignature = sig;
+          } catch (txErr) {
+            console.error(`❌ Fallback Tx ${index + 1} failed:`, txErr);
+            throw new Error(`Fallback transaction ${index + 1} failed: ${txErr}`);
+          }
         }
       }
     } else {
-      console.log("📨 Sending single transaction...");
+      console.log("📨 Single transaction detected - sending via RPC...");
+      console.log("⚠️  Note: Single transactions bypass Jito bundling\n");
+
       const tx = txs[0];
       tx.sign([creatorKeypair]);
 
@@ -264,11 +288,17 @@ export async function launchToken(
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`\n🎉 Launch completed in ${duration}s!`);
+    console.log(`\n📊 LAUNCH SUMMARY:`);
+    console.log(`   ├─ MEV Protection: ${meVProtected ? "✅ ACTIVE (Jito Bundle)" : "⚠️ Standard RPC"}`);
+    console.log(`   ├─ Token Mint: ${tokenInfo.id}`);
+    console.log(`   ├─ Explorer: ${getSolscanLink(finalSignature || "")}`);
+    console.log(`   └─ Duration: ${duration}s`);
 
     return {
       signature: finalSignature,
       tokenMint: tokenInfo.id,
       bundleId: bundleId,
+      meVProtected: meVProtected,
     };
   } catch (err) {
     console.error("❌ Launch failed:", err);
